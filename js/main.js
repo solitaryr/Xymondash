@@ -145,13 +145,13 @@ $(document).ready(function() {
 
         Cookies.set('xymondashsettings', config, { expires: 365 });
 
+        paused = false;
+
         interval = setInterval(function() {    //reload every 30s by default
             if (!paused) { triggerUpdate(); };
         }, config['refreshInterval']);
 
-        paused = false;
-
-        triggerUpdate();
+//        triggerUpdate();
     });
 
     //allow users to pause/resume page auto reload
@@ -206,7 +206,10 @@ $(document).ready(function() {
     });
 
     if (!userPaused) {
+//      console.log("_interval: " + interval);
         interval = setInterval(function() {    //reload every 30s by default
+//              let d = new Date();
+//              console.log("interval: " + interval + "\ndate: "+ d.getHours() + ":" + d.getMinutes() + ":" + d.getSeconds()  + "\nrefresh interval: " + config['refreshInterval']);
             if (!paused) { triggerUpdate(); };
         }, config['refreshInterval']);
     }
