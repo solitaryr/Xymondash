@@ -159,11 +159,11 @@ $(document).ready(function() {
     $("#pausePlay").click(function (e) {
         if (!userPaused) {
             userPaused = true;
+            clearInterval(interval);
             $(this).attr("tooltip", 'resume auto-refresh');
             $(this).find('i').toggleClass('fa-play-circle fa-pause-circle');
         } else {
             userPaused = false;
-            clearInterval(interval);
             $(this).attr("tooltip", 'pause auto-refresh');
             $(this).find('i').toggleClass('fa-pause-circle fa-play-circle');
         }
