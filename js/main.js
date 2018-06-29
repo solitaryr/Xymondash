@@ -11,6 +11,7 @@ const XYMONJSONURL = '/xymondash/cgi/xymon2json';
 
 let availableColors = ['red', 'purple', 'yellow', 'blue', 'green'];
 let availablePrios = ['prio1', 'prio2', 'prio3', 'other', 'ack'];
+let refreshInterval = 30000;
 let config = {};
 if (!config['testState']) config['testState'] = {};
 
@@ -24,10 +25,12 @@ if (Cookies.get('xymondashsettings')) {
     config['hideCols'] = false;
     config['notifications'] = false;
     config['3D'] = false;
+    config['refreshInterval'] = refreshInterval;
 }
 
-let dialogForm, backgroundColor;
+let dialogForm, backgroundColor, interval;
 let paused = false;
+let userPaused = false;
 
 $(document).ready(function() {
     $(document).tooltip({                         //initialize tooltips
@@ -111,6 +114,7 @@ $(document).ready(function() {
         config['hideCols'] = false;
         config['notifications'] = false;
         config['3D'] = false;
+        config['refreshInterval'] = 30000;
 
         //update config settings
         $('input[name="colors"]:checked').each(function(index) {
@@ -131,12 +135,38 @@ $(document).ready(function() {
         $('input[name="3D"]:checked').each(function(index) {
             config['3D'] = true;
         });
+
+        let refreshInterval = $('input#refreshInterval').val();
+        config['refreshInterval'] = refreshInterval;
+
         let font = $('select#font').val();
         config['font'] = font;
         $("#page").css("font-family", font);
 
         Cookies.set('xymondashsettings', config, { expires: 365 });
+
+        interval = setInterval(function() {    //reload every 30s by default
+            if (!paused) { triggerUpdate(); };
+        }, config['refreshInterval']);
+
         paused = false;
+
+        triggerUpdate();
+    });
+
+    //allow users to pause/resume page auto reload
+    $('button#pausePlay').attr('tooltip', 'pause auto-refresh');
+    $("#pausePlay").click(function (e) {
+        if (!userPaused) {
+            userPaused = true;
+            $(this).attr("tooltip", 'resume auto-refresh');
+            $(this).find('i').toggleClass('fa-play-circle fa-pause-circle');
+        } else {
+            userPaused = false;
+            clearInterval(interval);
+            $(this).attr("tooltip", 'pause auto-refresh');
+            $(this).find('i').toggleClass('fa-pause-circle fa-play-circle');
+        }
         triggerUpdate();
     });
 
@@ -174,9 +204,13 @@ $(document).ready(function() {
     $("input#message").click(function (e) {
         $(this).val('');
     });
-    setInterval(function() {    //reload every 30s
-        if (!paused) { triggerUpdate() };
-    }, 30000);
+
+    if (!userPaused) {
+        interval = setInterval(function() {    //reload every 30s by default
+            if (!paused) { triggerUpdate(); };
+        }, config['refreshInterval']);
+    }
+
     populateSettings();
     triggerUpdate();
 });
@@ -575,6 +609,11 @@ function populateSettings() {
         if (config[checkbox]) {
             $("input#"+checkbox).prop("checked", true);
         }
+    });
+
+    // yes, this is stupid
+    ['refreshInterval'].forEach(function(field) {
+        $("input#"+field).val(config[field]);
     });
 }
 
