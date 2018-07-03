@@ -11,26 +11,16 @@ const XYMONJSONURL = '/xymondash/cgi/xymon2json';
 
 let availableColors = ['red', 'purple', 'yellow', 'blue', 'green'];
 let availablePrios = ['prio1', 'prio2', 'prio3', 'other', 'ack'];
-let refreshInterval = 30000;
 let config = {};
+
 if (!config['testState']) config['testState'] = {};
 
-if (Cookies.get('xymondashsettings')) {
-    config = Cookies.getJSON('xymondashsettings');
-    if (!config['testState']) config['testState'] = {};
-} else {
-    config['activeColors'] = ['red', 'purple', 'yellow'];
-    config['activePrios'] = ['prio1', 'prio2', 'prio3', 'other', 'ack'];
-    config['activeBgPrios'] = ['prio1', 'prio2', 'prio3', 'other'];
-    config['hideCols'] = false;
-    config['notifications'] = false;
-    config['3D'] = false;
-    config['refreshInterval'] = refreshInterval;
-}
+readConfig();
 
 let dialogForm, backgroundColor, interval;
-let paused = false;
+let paused = false;         //true prevents background reloads
 let userPaused = false;
+let showSearch = false;     //true when host search is displayed
 
 $(document).ready(function() {
     $(document).tooltip({                         //initialize tooltips
@@ -56,11 +46,25 @@ $(document).ready(function() {
             paused = true;
         },
         close: function(event, ui) {
-            paused = false;
+            if (!showSearch) { paused = false; }
         },
         position: { my: "center top", at: "left bottom", collision: "flipfit" },
         classes: {
             "ui-tooltip": "ui-widget-shadow"
+        }
+    });
+
+    $(document).keypress(function(e) {
+        if (!$("input#hostname").is(":focus")) {
+            if (e.charCode == 114) {            //reload
+                doReload();
+            } else if (e.charCode == 109) {     //mark as seen
+                doMarkSeen();
+            } else if (e.charCode == 115) {     //search
+                $("form#searchform").css("display", "inline");
+                $("input#hostname").focus();
+                $("input#hostname").val('');
+            }
         }
     });
 
@@ -82,7 +86,7 @@ $(document).ready(function() {
             paused = true;      //no refresh while ack dialog is open
         },
         close: function() {
-            paused = false;
+            if (!showSearch) { paused = false; }
         }
     });
 
@@ -90,7 +94,7 @@ $(document).ready(function() {
     $("#page").css("font-family", config['font']);
 
     $("#reload").click(function(){
-        triggerUpdate();
+        doReload();
     });
 
     //open settings panel
@@ -136,7 +140,7 @@ $(document).ready(function() {
             config['3D'] = true;
         });
 
-        let refreshInterval = $('input#refreshInterval').val();
+        let refreshInterval = $('input[name="refreshInterval"]').val();
         config['refreshInterval'] = refreshInterval;
 
         let font = $('select#font').val();
@@ -170,13 +174,28 @@ $(document).ready(function() {
         triggerUpdate();
     });
 
+    $("button#search").click(function (e) {
+        $("form#searchform").css("display", "inline");
+    });
+
+    $("form#searchform").submit(function (e) {
+        e.preventDefault();
+        paused = true;
+        showSearch = true;
+        $("form#searchform").blur();
+        $(document).focus();
+        backgroundColor = 'green';
+        let hostname = $(this).children("input#hostname").val();
+        let params = "?host="+hostname+"&color="+availableColors.join(',');
+        config["activeColors"] = availableColors;
+        config["activePrios"] = availablePrios;
+        $("form#searchform").css("display", "none");
+        getJSON(XYMONJSONURL + params, processData);
+    });
+
     //mark all currently visible tests as 'seen'
     $("#markSeen").click(function (e) {
-        $('span.test').each(function(index) {
-            let sel = $(this).parent().parent().data('host') + '_' + $(this).data('test') + '_' + $(this).data('color');
-            config['testState'][sel] = 'seen';
-        });
-        triggerUpdate();
+        doMarkSeen();
     });
 
     $('button#markSeen').attr('tooltip', 'mark all as seen');
@@ -215,6 +234,7 @@ $(document).ready(function() {
     }
 
     populateSettings();
+    $(document).focus();
     triggerUpdate();
 });
 
@@ -340,7 +360,7 @@ function processData() {    //callback when JSON data is ready
                         if (config['testState'][seenSel] != 'seen') {
                             allSeen[host] = false;
                         }
-                        if (lowestPosHost < pos) {    //if we have a higher prio/color entry already
+                        if (lowestPosHost < pos && !showSearch) {    //if we have a higher prio/color entry already and do not show a search result
                             selector = config['activeColors'][lowestY] + '_' + config['activePrios'][lowestX];
                         } else {
                             selector = color + '_' + prio;
@@ -359,7 +379,7 @@ function processData() {    //callback when JSON data is ready
                         }
                         acktime = "acked until " + dateFormat(d, "HH:MM, mmmm d (dddd)");
                         ackmsg = '<b>'+ackmsg+'</b><br /><br />'+acktime;
-                        if (numTests[host] == 0) {   //new host -> we need a host entry first
+                        if (numTests[host] == 0 || showSearch) {   //new host or search result -> we need a host entry first
                             $("#" + selector).append(
                                 "<div class='msg' data-host='"+host+"'>"+
                                     "<span class='info'>"+host+": </span>"+
@@ -385,7 +405,7 @@ function processData() {    //callback when JSON data is ready
                         if (ackmsg != 'empty') {
                             $('i#'+cookie).attr('tooltip', ackmsg);
                         }
-                        if (numEntries++ > 200) {
+                        if (numEntries++ > 500) {
                             showFlash('Your settings yield too many tests! Please choose fewer colors or prios.');
                             throw new Error("too many results");
                         }
@@ -401,52 +421,56 @@ function processData() {    //callback when JSON data is ready
     });                                 //color loop
     setBackgroundColor();
 
-    //loop over hosts and determine allSeen and ackAll state
-    $('[data-host]').each(function(index) {
-        let host = $(this).data('host');
-
-        if (allSeen[host]) {
-            $('[data-host="'+host+'"]').addClass("seen");
-        }
-        if (ackTests[host] > 1) {
-            $('[data-host="'+host+'"]').append(
-                "<div class='tests'>"+
-                    "<i class='ack ackall fas fa-check-double' id='all-"+host+"'></i>"+
-                "</div>");
-        }
-    });
-
-    //delete gone tests from testState
-    $.each(config['testState'], function(sel, value) {
-        let [host, test, color] = sel.split('_');
-        let entry = $('[data-host="'+host+'"]').find('div.tests').children('span.test[data-test="' + test + '"][data-color="'+color+'"]');
-        if (entry.length == 0) {
-            delete config['testState'][sel];
-        }
-    });
-    Cookies.set('xymondashsettings', config, { expires: 365 }); //write config so that test states are persistent
-
-    //let's find all empty columns and hide them
     let numCols = availablePrios.length;
-    availablePrios.forEach(function(prio) {
-        let allEmpty = true;
-        availableColors.forEach(function(color) {
-            let selector = color + '_' + prio;
-            if (!$("#" + selector).hasClass("inv")) {
-                allEmpty = false;
+    if (!showSearch) {      //regular run
+        //loop over hosts and determine allSeen and ackAll state
+        $('[data-host]').each(function(index) {
+            let host = $(this).data('host');
+
+            if (allSeen[host]) {
+                $('[data-host="'+host+'"]').addClass("seen");
+            }
+            if (ackTests[host] > 1) {
+                $('[data-host="'+host+'"]').append(
+                    "<div class='tests'>"+
+                        "<i class='ack ackall fas fa-check-double' id='all-"+host+"'></i>"+
+                    "</div>");
             }
         });
-        if ($.inArray(prio, config['activePrios']) == -1 || config['hideCols']) {
-            if (allEmpty) {
-                config['activeColors'].concat('l').forEach(function(color) {
-                    let selector = color + '_' + prio;
-                    $("#" + selector).addClass("remove");
-                });
-                numCols--;
-            }
-        }
-    });
 
+        //delete gone tests from testState
+        $.each(config['testState'], function(sel, value) {
+            let [host, test, color] = sel.split('_');
+            let entry = $('[data-host="'+host+'"]').find('div.tests').children('span.test[data-test="' + test + '"][data-color="'+color+'"]');
+            if (entry.length == 0) {
+                delete config['testState'][sel];
+            }
+        });
+
+        //let's find all empty columns and hide them
+        availablePrios.forEach(function(prio) {
+            let allEmpty = true;
+            availableColors.forEach(function(color) {
+                let selector = color + '_' + prio;
+                if (!$("#" + selector).hasClass("inv")) {
+                    allEmpty = false;
+                }
+            });
+            if ($.inArray(prio, config['activePrios']) == -1 || config['hideCols']) {
+                if (allEmpty) {
+                    config['activeColors'].concat('l').forEach(function(color) {
+                        let selector = color + '_' + prio;
+                        $("#" + selector).addClass("remove");
+                    });
+                    numCols--;
+                }
+            }
+        });
+
+        Cookies.set('xymondashsettings', config, { expires: 365 }); //write config so that test states are persistent
+    } else {            //search result -> recover previous config
+        readConfig();
+    }
 
     let width = (100/numCols) - 2;
     const mq = window.matchMedia("(max-width: 720px)");
@@ -485,7 +509,7 @@ function processData() {    //callback when JSON data is ready
         }
         dialogForm.dialog("open");
     });
-}
+}       //end processData
 
 function createLink(host, test) {
     return XYMONURL + '?HOST=' +host+'&SERVICE='+test;
@@ -536,6 +560,9 @@ function ackTest() {
                         triggerUpdate();
                     }
                 },
+                error: function(data) {
+                    console.log(data);
+                },
             });
         }
     });
@@ -553,7 +580,7 @@ function keys(obj) {
 }
 
 function background(color, prio) {
-    if (config['activeBgPrios'].includes(prio)) {
+    if (config['activeBgPrios'].includes(prio) || showSearch) {
        if (backgroundColor == 'red') {
            return;
        } else if (backgroundColor == 'purple') {
@@ -658,6 +685,35 @@ function showFlash(msg) {
             $("table#container").fadeTo("slow", 1.0);
         });
     });
+}
+
+function readConfig() {
+    if (Cookies.get('xymondashsettings')) {
+        config = Cookies.getJSON('xymondashsettings');
+        if (!config['testState']) config['testState'] = {};
+    } else {
+        config['activeColors'] = ['red', 'purple', 'yellow'];
+        config['activePrios'] = ['prio1', 'prio2', 'prio3', 'other', 'ack'];
+        config['activeBgPrios'] = ['prio1', 'prio2', 'prio3', 'other'];
+        config['hideCols'] = false;
+        config['notifications'] = false;
+        config['3D'] = false;
+        config['refreshInterval'] = 30000;
+    }
+}
+
+function doReload() {
+    paused = false;
+    showSearch = false;
+    triggerUpdate();
+}
+
+function doMarkSeen() {
+    $('span.test').each(function(index) {
+        let sel = $(this).parent().parent().data('host') + '_' + $(this).data('test') + '_' + $(this).data('color');
+        config['testState'][sel] = 'seen';
+    });
+    triggerUpdate();
 }
 
 $.urlParam = function() {
