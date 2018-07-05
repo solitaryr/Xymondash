@@ -55,7 +55,7 @@ $(document).ready(function() {
     });
 
     $(document).keypress(function(e) {
-        if (!$("input#hostname").is(":focus")) {
+        if (!$("input#hostname").is(":focus") && !paused) {
             if (e.charCode == 114) {            //reload
                 doReload();
             } else if (e.charCode == 109) {     //mark as seen
@@ -117,6 +117,7 @@ $(document).ready(function() {
         config['activeBgPrios'] = [];
         config['hideCols'] = false;
         config['notifications'] = false;
+        config['newTab'] = false;
         config['3D'] = false;
         config['refreshInterval'] = 30000;
 
@@ -130,14 +131,10 @@ $(document).ready(function() {
         $('input[name="background"]:checked').each(function(index) {
             config['activeBgPrios'].push($(this).attr('id'));
         });
-        $('input[name="hideCols"]:checked').each(function(index) {
-            config['hideCols'] = true;
-        });
-        $('input[name="notifications"]:checked').each(function(index) {
-            config['notifications'] = true;
-        });
-        $('input[name="3D"]:checked').each(function(index) {
-            config['3D'] = true;
+        ['hideCols', 'notifications', 'newTab', '3D'].forEach(function(checkbox) {
+            $('input[name="'+checkbox+'"]:checked').each(function(index) {
+                config[checkbox] = true;
+            });
         });
 
         let refreshInterval = $('input[name="refreshInterval"]').val();
@@ -485,15 +482,18 @@ function processData() {    //callback when JSON data is ready
     if (config['3D']) {
         $(".msg").css('box-shadow', '2px 2px 4px rgba(0,0,0,0.9), inset -2px -2px 4px rgba(50,50,50,0.8), inset 2px 2px 4px rgba(250,250,250,0.4)');
     }
+    let d = Date();
+    $("#date").html( dateFormat(d, "HH:MM, mmmm d"));
 
+    let linkTarget = (config['newTab'])?'_blank':'_self';
     $("span.info").click(function(){
         $(this).innerHTML = $(this).parent().parent().data("host")+' / ';
         let link = createLink($(this).parent().data("host"), 'info');
-        window.open(link,"_self")
+        window.open(link, linkTarget)
     });
     $("span.test").click(function(){
         let link = createLink($(this).parent().parent().data("host"), $(this).data("test"));
-        window.open(link,"_self")
+        window.open(link, linkTarget)
     });
     $("i.ack").click(function(){
         dialogForm.dialog("option", "hostname", $(this).parent().parent().data("host"));
@@ -647,9 +647,11 @@ function populateSettings() {
     $('#settings-container-pick').append('</div>');
     $("#font").selectmenu();
 
-    ['hideCols', 'notifications', '3D'].forEach(function(checkbox) {
+    ['hideCols', 'notifications', 'newTab', '3D'].forEach(function(checkbox) {
         if (config[checkbox]) {
             $("input#"+checkbox).prop("checked", true);
+        } else {
+            $("input#"+checkbox).prop("checked", false);
         }
     });
 
@@ -697,6 +699,7 @@ function readConfig() {
         config['activeBgPrios'] = ['prio1', 'prio2', 'prio3', 'other'];
         config['hideCols'] = false;
         config['notifications'] = false;
+        config['newTab'] = false;
         config['3D'] = false;
         config['refreshInterval'] = 30000;
     }
