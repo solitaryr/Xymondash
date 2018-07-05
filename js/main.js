@@ -17,7 +17,7 @@ if (!config['testState']) config['testState'] = {};
 
 readConfig();
 
-let dialogForm, backgroundColor, interval;
+let dialogForm, backgroundColor, timerId;
 let paused = false;         //true prevents background reloads
 let userPaused = false;
 let showSearch = false;     //true when host search is displayed
@@ -148,7 +148,7 @@ $(document).ready(function() {
 
         paused = false;
 
-        interval = setInterval(function() {    //reload every 30s by default
+        timerId = setInterval(function() {    //reload every 30s by default
             if (!paused) { triggerUpdate(); };
         }, config['refreshInterval']);
 
@@ -160,7 +160,7 @@ $(document).ready(function() {
     $("#pausePlay").click(function (e) {
         if (!userPaused) {
             userPaused = true;
-            clearInterval(interval);
+            clearInterval(timerId);
             $(this).attr("tooltip", 'resume auto-refresh');
             $(this).find('i').toggleClass('fa-play-circle fa-pause-circle');
         } else {
@@ -222,10 +222,10 @@ $(document).ready(function() {
     });
 
     if (!userPaused) {
-//      console.log("_interval: " + interval);
-        interval = setInterval(function() {    //reload every 30s by default
+//      console.log("_timerId: " + timerId);
+        timerId = setInterval(function() {    //reload every 30s by default
 //              let d = new Date();
-//              console.log("interval: " + interval + "\ndate: "+ d.getHours() + ":" + d.getMinutes() + ":" + d.getSeconds()  + "\nrefresh interval: " + config['refreshInterval']);
+//              console.log("timerId: " + timerId + "\ndate: "+ d.getHours() + ":" + d.getMinutes() + ":" + d.getSeconds()  + "\nrefresh interval: " + config['refreshInterval']);
             if (!paused) { triggerUpdate(); };
         }, config['refreshInterval']);
     }
