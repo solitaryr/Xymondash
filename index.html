@@ -166,7 +166,7 @@
           </table>
         </div>
 
-        <div id="dialog-form" title="Acknowledge test">
+        <div id="dialog-form" title="Modify test">
             <form>
                 <fieldset>
                     <label for="duration">Duration</label>
@@ -177,10 +177,13 @@
                             <option value="hours">hours</option>
                             <option value="days">days</option>
                         </select>
+                        <span id="disableOK"> (-1 for disable until OK)</span>
                     </div>
-                    <label for="ackmsg">Acknowledge text</label>
+                    <label for="ackmsg">Message</label>
                     <input type="text" name="MESSAGE" id="message" value="working on it" class="text ui-widget-content ui-corner-all">
                     <input type="hidden" name="NUMBER" id="number">
+                    <input type="hidden" name="HOST" id="host">
+                    <input type="hidden" name="SERVICE" id="service">
 
                     <!-- Allow form submission with keyboard without duplicating the dialog button -->
                     <input type="submit" tabindex="-1" style="position:absolute; top:-1000px">

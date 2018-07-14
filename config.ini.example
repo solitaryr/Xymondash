@@ -1,6 +1,12 @@
 # location of xymon executable in your file system
 XYMONCLI="/usr/lib/xymon/server/bin/xymon"
 
+# location of ackinfo.sh executable in your file system
+XYMONACKINFOSH="/usr/lib/xymon/cgi-secure/ackinfo.sh"
+
+# absolute URL of Xymon's svcstatus
+XYMONSVCSTATUSURL="https://xymon.phys.ethz.ch/xymon-cgi/svcstatus"
+
 # location of Xymon's critical.cfg in your file system (if you have one)
 CRITICAL="/etc/xymon/critical.cfg"
 
@@ -10,8 +16,14 @@ XYMONURL="/xymon-cgi/svcstatus.sh"
 # relative URL of xymon-ack on your monitoring server
 XYMONACKURL="/xymondash/cgi/xymon-ack"
 
+# relative URL of xymon-disable on your monitoring server
+XYMONDISURL="/xymondash/cgi/xymon-disable"
+
 # relative URL of xymon2json on your monitoring server
 XYMONJSONURL="/xymondash/cgi/xymon2json"
 
 # website title
 TITLE="ISG D-PHYS xymon dashboard"
+
+# path to python3 interpreter
+PYTHON3="/usr/bin/env python3"

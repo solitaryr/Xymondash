@@ -7,6 +7,7 @@
 
 const XYMONURL     = '/xymon-cgi/svcstatus.sh';
 const XYMONACKURL  = '/xymondash/cgi/xymon-ack';
+const XYMONDISURL  = '/xymondash/cgi/xymon-disable';
 const XYMONJSONURL = '/xymondash/cgi/xymon2json';
 
 let availableColors = ['red', 'purple', 'yellow', 'blue', 'green'];
@@ -48,6 +49,10 @@ $(document).ready(function() {
         close: function(event, ui) {
             if (!showSearch) { paused = false; }
         },
+        show: {
+            effect: "none",
+            delay: "250"
+        },
         position: { my: "center top", at: "left bottom", collision: "flipfit" },
         classes: {
             "ui-tooltip": "ui-widget-shadow"
@@ -74,20 +79,32 @@ $(document).ready(function() {
         width: 350,
         modal: true,
         buttons: {
-            "Acknowledge test": ackTest,
-            Cancel: function() {
-                dialogForm.dialog( "close" );
-            }
         },
         open: function() {
-            let options = $( "#dialog-form" ).dialog( "option" );
+            let options = $("#dialog-form").dialog("option");
             let cookie = options.cookie;
             $("#number").val(cookie);
+            let host = options.hostname;
+            $("#host").val(host);
+            let service = options.service;
+            $("#service").val(service);
+            let buttons = dialogForm.dialog('option', 'buttons');
+            if (options.actions.match(/a/)) {
+                $.extend(buttons, { "Acknowledge": ackTest });
+            }
+            if (options.actions.match(/d/)) {
+                $.extend(buttons, { "Disable": disableTest });
+            }
+            dialogForm.dialog('option', 'buttons', buttons);
+
             paused = true;      //no refresh while ack dialog is open
         },
         close: function() {
             if (!showSearch) { paused = false; }
         }
+    });
+    $("#dialog-form").on( "submit", function( event ) {
+        event.preventDefault();
     });
 
     $("#period").selectmenu();
@@ -276,7 +293,7 @@ function processData() {    //callback when JSON data is ready
 
     let xymonData = this.response;
     xymonData.forEach(function(entry) {     //loop thru data and process all tests into entries object
-        let ackmsg, acktime, cookie;
+        let ackmsg, acktime, dismsg, distime, cookie;
         let host = entry.hostname.trim();
         let test = entry.testname.trim();
         let color = entry.color.trim();
@@ -293,6 +310,13 @@ function processData() {    //callback when JSON data is ready
             ackmsg = 'empty';
             acktime = '';
         }
+        if (entry.dismsg) {
+            dismsg = entry.dismsg;
+            distime = (entry.disabletime == '-1')?'disabled until OK':entry.disabletime;
+        } else {
+            dismsg = 'empty';
+            distime = '';
+        }
         if (entry.cookie) {
             cookie = entry.cookie;
         } else {
@@ -305,6 +329,8 @@ function processData() {    //callback when JSON data is ready
             if (!entries[color][prio][host][test]) entries[color][prio][host][test] = {};
             entries[color][prio][host][test]['ackmsg'] = ackmsg;
             entries[color][prio][host][test]['acktime'] = acktime;
+            entries[color][prio][host][test]['dismsg'] = dismsg;
+            entries[color][prio][host][test]['distime'] = distime;
             entries[color][prio][host][test]['cookie'] = cookie;
             entries[color][prio][host][test]['msg'] = msg;
             lowestPos[host] = {};
@@ -347,6 +373,8 @@ function processData() {    //callback when JSON data is ready
                     for (let test in entries[color][prio][host]) {
                         let ackmsg = entries[color][prio][host][test]['ackmsg'];
                         let acktime = entries[color][prio][host][test]['acktime'];
+                        let dismsg = entries[color][prio][host][test]['dismsg'];
+                        let distime = entries[color][prio][host][test]['distime'];
                         let msg = entries[color][prio][host][test]['msg'];
                         let cookie = entries[color][prio][host][test]['cookie'];
                         let lowestX = lowestPos[host]['x'];
@@ -354,6 +382,7 @@ function processData() {    //callback when JSON data is ready
                         let lowestPosHost = lowestX + 10*lowestY;
                         let selector;
                         let seenSel = host + '_' + test + '_' + color;
+                        let modifySel = host + '_' + test;
                         if (config['testState'][seenSel] != 'seen') {
                             allSeen[host] = false;
                         }
@@ -364,25 +393,37 @@ function processData() {    //callback when JSON data is ready
                             lowestPos[host]['x'] = x;
                             lowestPos[host]['y'] = y;
                         }
-                        let ackClass = (ackmsg != 'empty')?' acked':'';
+                        let ackClass = (ackmsg != 'empty' || dismsg != 'empty')?' acked':'';
                         ackmsg = ackmsg.replace(/\\n/ig, "<br />");
+                        dismsg = dismsg.replace(/\\n/ig, "<br />");
                         let d = new Date(acktime*1000);
+                        acktime = "acked until " + dateFormat(d, "HH:MM, mmmm d (dddd)");
+                        if (distime != 'disabled until OK') {
+                            let d = new Date(distime*1000);
+                            distime = "disabled until " + dateFormat(d, "HH:MM, mmmm d (dddd)");
+                        }
                         let ackIcon;
-                        if (cookie == 'empty') {
+                        if (cookie == 'empty' && dismsg == 'empty') {
                             ackIcon = '&nbsp;&nbsp;';
                         } else {
-                            ackIcon = "<i class='ack"+ackClass+" fas fa-check' id='"+cookie+"'></i>";
+                            ackIcon = "<i class='ack"+ackClass+" fas fa-check' id='"+modifySel+"'></i>";
                             ackTests[host]++;
                         }
-                        acktime = "acked until " + dateFormat(d, "HH:MM, mmmm d (dddd)");
-                        ackmsg = '<b>'+ackmsg+'</b><br /><br />'+acktime;
+                        let popupmsg = 'empty';
+                        let actions = 'd';
+                        if (cookie != 'empty') actions += ',a';
+                        if (ackmsg != 'empty') {
+                            popupmsg = '<b>'+ackmsg+'</b><br /><br />'+acktime;
+                        } else if (dismsg != 'empty') {
+                            popupmsg = '<b>'+dismsg+'</b><br /><br />'+distime;
+                        }
                         if (numTests[host] == 0 || showSearch) {   //new host or search result -> we need a host entry first
                             $("#" + selector).append(
                                 "<div class='msg' data-host='"+host+"'>"+
                                     "<span class='info'>"+host+": </span>"+
                                     "<div class='tests'>"+
-                                        "<span class='test"+ackClass+"' data-test='"+test+"' data-color='" +color+
-                                            "' data-ackmsg='" +escape(ackmsg)+"' data-cookie='"+cookie+"'>"+test+
+                                        "<span class='test"+ackClass+"' data-test='"+test+"' data-color='" +color+"' data-cookie='"+cookie+"' data-actions='"+actions+"'>"+
+                                            test+
                                         "</span>"+
                                         ackIcon+
                                     "</div>"+
@@ -391,16 +432,16 @@ function processData() {    //callback when JSON data is ready
                         } else {                  //host already exists -> just add another test
                             $('[data-host="'+host+'"]').append(
                                 "<div class='tests'>"+
-                                    "<span class='test"+ackClass+"' data-test='"+test+"' data-color='" +color+
-                                        "' data-ackmsg='"+escape(ackmsg)+"' data-cookie='"+cookie+"' >"+test+
+                                    "<span class='test"+ackClass+"' data-test='"+test+"' data-color='" +color+"' data-cookie='"+cookie+"' data-actions='"+actions+"' >"+
+                                        test+
                                     "</span>"+
                                     ackIcon+
                                 "</div>");
                         }
                         let entry = $('[data-host="'+host+'"]').find('div.tests').children('span.test[data-test="' + test + '"][data-color="'+color+'"]');
                         $(entry).attr('tooltip', msg);
-                        if (ackmsg != 'empty') {
-                            $('i#'+cookie).attr('tooltip', ackmsg);
+                        if (popupmsg != 'empty') {
+                            $('i#'+modifySel).attr('tooltip', popupmsg);
                         }
                         if (numEntries++ > 500) {
                             showFlash('Your settings yield too many tests! Please choose fewer colors or prios.');
@@ -499,13 +540,20 @@ function processData() {    //callback when JSON data is ready
         dialogForm.dialog("option", "hostname", $(this).parent().parent().data("host"));
         if ($(this).hasClass('ackall')) {   //ack all tests of this host
             let cookies = [];
+            let tests = [];
+            let actions = [];
             $(this).parent().parent().find("span.test").each(function(e) {
-                let cookie = $(this).data("cookie");
-                cookies.push(cookie);
+                cookies.push($(this).data("cookie"));
+                tests.push($(this).data("test"));
+                actions.push($(this).data("actions"));
             });
-            dialogForm.dialog("option", "cookie", cookies.join(','));
+            dialogForm.dialog("option", "cookie", cookies.join('#'));
+            dialogForm.dialog("option", "service", tests.join('#'));
+            dialogForm.dialog("option", "actions", actions.join('#'));
         } else {                            //single test
             dialogForm.dialog("option", "cookie", $(this).parent().children("span.test").data("cookie"));
+            dialogForm.dialog("option", "service", $(this).parent().children("span.test").data("test"));
+            dialogForm.dialog("option", "actions", $(this).parent().children("span.test").data("actions"));
         }
         dialogForm.dialog("open");
     });
@@ -535,25 +583,23 @@ function getJSON(url, callback) {
 }
 
 function ackTest() {
-    let fields = ['number', 'delay', 'period', 'message'];
+    let fields = ['number', 'delay', 'period', 'message', 'host', 'service'];
     let vals = {};
     fields.forEach(function(field) {
         vals[field] = $("#"+field).val().trim();
     });
-    if (vals['period'] == 'hours') {
-        vals['delay'] *= 60;
-    } else if (vals['period'] == 'days') {
-        vals['delay'] *= 60*24;
-    }
+    if (!vals['message']) vals['message'] = '-';
+    let min = calcMins(vals['delay'],  vals['period']);
 
     let i = 0;
-    let numbers = vals['number'].split(',');
+    let numbers = vals['number'].split('#');
+    let services = vals['service'].split('#');
     numbers.forEach(function(number) {
         if (number != 'empty') {
             $.ajax({
                 type: "POST",
                 url: XYMONACKURL,
-                data: { number: number, min: vals['delay'], msg: vals['message'] },
+                data: { number: number, min: min, msg: vals['message'], host: vals['host'], test: services[i] },
                 success: function(data) {
                     if (++i == numbers.length) {
                         dialogForm.dialog( "close" );
@@ -562,10 +608,51 @@ function ackTest() {
                 },
                 error: function(data) {
                     console.log(data);
+                    alert('could not acknowledge test!');
                 },
             });
         }
     });
+}
+
+function disableTest() {
+    let fields = ['delay', 'period', 'message', 'host', 'service'];
+    let vals = {};
+    fields.forEach(function(field) {
+        vals[field] = $("#"+field).val().trim();
+    });
+    if (!vals['message']) vals['message'] = '-';
+    let min = calcMins(vals['delay'],  vals['period']);
+
+    let i = 0;
+    let services = vals['service'].split('#');
+    services.forEach(function(service) {
+        $.ajax({
+            type: "POST",
+            url: XYMONDISURL,
+            data: { min: min, msg: vals['message'], host: vals['host'], test: service },
+            success: function(data) {
+                if (++i == services.length) {
+                    dialogForm.dialog( "close" );
+                    triggerUpdate();
+                }
+            },
+            error: function(data) {
+                console.log(data);
+                alert('could not disable test!');
+            },
+        });
+    });
+}
+
+function calcMins(min, period) {
+    if (min == -1) return -1;
+    if (period == 'hours') {
+        min *= 60;
+    } else if (period == 'days') {
+        min *= 60*24;
+    }
+    return min;
 }
 
 function keys(obj) {
@@ -595,7 +682,7 @@ function background(color, prio) {
            if ((color == 'red') || (color == 'purple') || (color == 'yellow')) {
                backgroundColor = color;
            }
-       } else {
+       } else if (color != 'blue' ) {
                backgroundColor = color;
        }
     }
